@@ -157,13 +157,13 @@ TR = {
             ("build_pkg",    "Build-Pakete (gcc, make, …)",       "build",       "Via apt installiert"),
             ("libusb_pkg",   "libusb-1.0-0-dev",                  "libusb",      "Via apt installiert"),
         ],
-        "check_groups": [
-            ("SYSTEM", [("kernel","Kernel-Version",check_kernel),("distro","Linux-Distribution",check_distro),("apt","Paketmanager (apt)",check_apt),("internet","Internetzugang",check_internet)]),
-            ("HARDWARE", [("usb","ASUS N-KEY USB-Gerät",check_usb_nkey),("sysfs","kbd_backlight sysfs",check_sysfs)]),
-            ("KERNEL-MODULE", [("hid","hid_asus Modul",check_hid_asus),("wmi","asus_wmi Modul",check_asus_wmi),("nb","asus_nb_wmi Modul",check_asus_nb)]),
-            ("SOFTWARE", [("build","Build-Tools",check_build_tools),("libusb","libusb-1.0-0-dev",check_libusb),("pygtk","Python GTK3",check_python_gtk),("rogaura","rogauracore",check_rogauracore)]),
-            ("INSTALLATION", [("script","Installations-Script",check_install_script),("udev","udev-Regel",check_udev),("svc","systemd-Service",check_systemd_service)]),
-        ],
+        "check_group_labels": {
+            "SYSTEM":       ("SYSTEM",       [("kernel","Kernel-Version"),("distro","Linux-Distribution"),("apt","Paketmanager (apt)"),("internet","Internetzugang")]),
+            "HARDWARE":     ("HARDWARE",     [("usb","ASUS N-KEY USB-Gerät"),("sysfs","kbd_backlight sysfs")]),
+            "KERNEL-MODULE":("KERNEL-MODULE",[("hid","hid_asus Modul"),("wmi","asus_wmi Modul"),("nb","asus_nb_wmi Modul")]),
+            "SOFTWARE":     ("SOFTWARE",     [("build","Build-Tools"),("libusb","libusb-1.0-0-dev"),("pygtk","Python GTK3"),("rogaura","rogauracore")]),
+            "INSTALLATION": ("INSTALLATION", [("script","Installations-Script"),("udev","udev-Regel"),("svc","systemd-Service")]),
+        },
     },
     "en": {
         "win_title":       "ROG RGB Installer",
@@ -279,13 +279,13 @@ TR = {
             ("build_pkg",    "Build packages (gcc, make, …)",   "build",       "Installed via apt"),
             ("libusb_pkg",   "libusb-1.0-0-dev",                "libusb",      "Installed via apt"),
         ],
-        "check_groups": [
-            ("SYSTEM", [("kernel","Kernel version",check_kernel),("distro","Linux distribution",check_distro),("apt","Package manager (apt)",check_apt),("internet","Internet connection",check_internet)]),
-            ("HARDWARE", [("usb","ASUS N-KEY USB device",check_usb_nkey),("sysfs","kbd_backlight sysfs",check_sysfs)]),
-            ("KERNEL MODULES", [("hid","hid_asus module",check_hid_asus),("wmi","asus_wmi module",check_asus_wmi),("nb","asus_nb_wmi module",check_asus_nb)]),
-            ("SOFTWARE", [("build","Build tools",check_build_tools),("libusb","libusb-1.0-0-dev",check_libusb),("pygtk","Python GTK3",check_python_gtk),("rogaura","rogauracore",check_rogauracore)]),
-            ("INSTALLATION", [("script","Install script",check_install_script),("udev","udev rule",check_udev),("svc","systemd service",check_systemd_service)]),
-        ],
+        "check_group_labels": {
+            "SYSTEM":        ("SYSTEM",       [("kernel","Kernel version"),("distro","Linux distribution"),("apt","Package manager (apt)"),("internet","Internet connection")]),
+            "HARDWARE":      ("HARDWARE",     [("usb","ASUS N-KEY USB device"),("sysfs","kbd_backlight sysfs")]),
+            "KERNEL MODULES":("KERNEL MODULES",[("hid","hid_asus module"),("wmi","asus_wmi module"),("nb","asus_nb_wmi module")]),
+            "SOFTWARE":      ("SOFTWARE",     [("build","Build tools"),("libusb","libusb-1.0-0-dev"),("pygtk","Python GTK3"),("rogaura","rogauracore")]),
+            "INSTALLATION":  ("INSTALLATION", [("script","Install script"),("udev","udev rule"),("svc","systemd service")]),
+        },
     },
 }
 
@@ -576,7 +576,28 @@ def check_install_script():
     return "fail", lbl_t, det
 
 def get_check_groups():
-    return _t("check_groups")
+    _CHECK_FNS = {
+        "kernel":        check_kernel,
+        "distro":        check_distro,
+        "apt":           check_apt,
+        "internet":      check_internet,
+        "usb":           check_usb_nkey,
+        "sysfs":         check_sysfs,
+        "hid":           check_hid_asus,
+        "wmi":           check_asus_wmi,
+        "nb":            check_asus_nb,
+        "build":         check_build_tools,
+        "libusb":        check_libusb,
+        "pygtk":         check_python_gtk,
+        "rogaura":       check_rogauracore,
+        "script":        check_install_script,
+        "udev":          check_udev,
+        "svc":           check_systemd_service,
+    }
+    result = []
+    for key, (cat_name, items) in _t("check_group_labels").items():
+        result.append((cat_name, [(cid, lbl, _CHECK_FNS[cid]) for cid, lbl in items]))
+    return result
 
 CHECK_GROUPS = None  # Initialized at runtime via get_check_groups()
 

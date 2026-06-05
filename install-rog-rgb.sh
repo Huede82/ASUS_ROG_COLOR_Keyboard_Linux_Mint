@@ -22,6 +22,24 @@
 # ============================================================
 set -euo pipefail
 
+# ── Auto-relaunch in terminal if started by double-click ─────
+if [[ ! -t 0 ]] && [[ ! -t 1 ]]; then
+    SELF="$(realpath "$0")"
+    WAIT='echo; read -rp "  Fertig – Enter zum Schließen / Done – press Enter: "'
+    CMD="sudo bash \"$SELF\" $(printf '%q ' "$@"); $WAIT"
+    for T in x-terminal-emulator gnome-terminal xfce4-terminal mate-terminal tilix xterm; do
+        if command -v "$T" &>/dev/null; then
+            case "$T" in
+                gnome-terminal|tilix) exec "$T" -- bash -c "$CMD" ;;
+                *)                    exec "$T" -e "bash -c '$CMD'" ;;
+            esac
+        fi
+    done
+    # Fallback: kein Terminal gefunden
+    notify-send "ROG RGB Installer" "Kein Terminal gefunden – bitte manuell ausführen:\nsudo bash $SELF" 2>/dev/null || true
+    exit 1
+fi
+
 # ── Language / Sprache: de (Deutsch, default) | en (English) ─
 ROG_LANG="${ROG_LANG:-de}"
 

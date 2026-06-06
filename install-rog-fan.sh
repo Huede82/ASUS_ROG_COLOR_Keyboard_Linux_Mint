@@ -403,7 +403,7 @@ uninstall() {
 
     echo ""
     ANSWER="n"
-    if [[ -t 0 ]]; then
+    if [[ -t 0 && -t 1 ]]; then
         read -rp "  $T_UNINST_ASK" ANSWER || ANSWER="n"
     fi
     case "${ANSWER,,}" in
@@ -811,6 +811,10 @@ mkdir -p "$USER_SVC_DIR"
 if [[ -f "$SCRIPT_DIR/rog-fan-keyd.service" ]]; then
     install -Dm644 "$SCRIPT_DIR/rog-fan-keyd.service" "$USER_SVC_DIR/rog-fan-keyd.service"
     chown -R "$INSTALL_USER:$INSTALL_USER" "$INSTALL_HOME/.config/systemd"
+    # Linger einschalten, damit der User-Service ohne aktive Login-Session beim Boot startet
+    if ! loginctl show-user "$INSTALL_USER" 2>/dev/null | grep -q '^Linger=yes'; then
+        loginctl enable-linger "$INSTALL_USER" 2>/dev/null || true
+    fi
     if user_systemctl daemon-reload && \
        user_systemctl enable --now rog-fan-keyd.service; then
         ok "$T_KEYD_SERVICE_OK"
@@ -856,6 +860,13 @@ fi
 
 CURRENT_PP=$(cat /sys/firmware/acpi/platform_profile 2>/dev/null || echo "unknown")
 info "$T_CURRENT_PROFILE: ${YLW}$CURRENT_PP${RST}"
+
+# ── Post-Install Verifikation ────────────────────────────────
+step "Post-Install Verifikation"
+systemctl is-enabled rog-fan-boot.service >/dev/null 2>&1 || warn "rog-fan-boot.service not enabled"
+systemctl is-active  rog-fan-boot.service >/dev/null 2>&1 || warn "rog-fan-boot.service not active"
+sudo -u "$INSTALL_USER" XDG_RUNTIME_DIR=/run/user/$(id -u "$INSTALL_USER") systemctl --user is-enabled rog-fan-keyd.service >/dev/null 2>&1 || warn "rog-fan-keyd.service (user) not enabled"
+sudo -u "$INSTALL_USER" XDG_RUNTIME_DIR=/run/user/$(id -u "$INSTALL_USER") systemctl --user is-active  rog-fan-keyd.service >/dev/null 2>&1 || warn "rog-fan-keyd.service (user) not active"
 
 # ── Abschluss ────────────────────────────────────────────────
 echo ""

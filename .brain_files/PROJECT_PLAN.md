@@ -22,6 +22,7 @@
 
 - [x] Bug identifiziert: `::` in sudoers nicht escaped (führt zu Syntaxfehler bei sudo-Aufrufen über `asus::kbd_backlight`-Pfade)
 - [x] Installer-Fix in `install-rog-rgb.sh` Zeile 350 (`asus\:\:kbd_backlight`)
+- [x] (2026-06-06) Installer-Härtung `install-rog-fan.sh`: `rog-fan-keyd.service` auf `WantedBy=default.target` umgestellt (Z. 14), idempotenter `loginctl enable-linger`-Guard vor User-Service-Enable (Z. 814–817) und Post-Install-Sanity-Check für `rog-fan-boot.service` / User-`rog-fan-keyd.service` (Z. 864–869). Behebt: User-Unit nach Reboot nicht aktiv.
 - [ ] `rog-kbd-diagnose --fix` erweitern: erkennt fehlerhafte sudoers-Datei via `visudo -c` und repariert sie automatisch
 - [ ] Hinweis in README für Bestandsinstallationen (1-Zeilen `sed`-Befehl als Quick-Fix dokumentieren)
 
@@ -129,6 +130,19 @@
 
 - [x] Bugfix: `rog-fan-keyd`-Service-Aktivierung unter `pkexec` (neuer `user_systemctl()`-Helper in `install-rog-fan.sh`)
 
+### v0.7.1 — GUI-Uninstaller Hotfix (ERLEDIGT)
+
+- [x] Fix 1 — `install-rog-fan.sh`: `read -rp`-Prompt im Uninstall-Pfad nur noch ausführen wenn `[[ -t 0 && -t 1 ]]`. Verhinderte Deadlock, wenn die GUI das Skript via `pkexec` aufruft und stdout eine Pipe ist; Prompt-Text wurde durch `stdbuf -oL` zusätzlich verschluckt → wirkte wie kompletter Hang nach „[OK] asusd deaktiviert".
+- [x] Fix 2 — `install-rog-fan-gui.py`: `subprocess.Popen` jetzt mit `stdin=subprocess.DEVNULL` als Defense-in-Depth gegen künftige `read`-Stellen. **(In v0.7.2 revertiert — brach pkexec/Polkit-Auth-Agent: „Einlesen der Argumente schlug fehl: Anzeige kann nicht geöffnet werden". Patch A reicht alleine.)**
+- [x] Verifiziert auf Linux Mint nach Reboot: Fan-Service lädt sauber, Fan-Taste funktioniert.
+
+### v0.7.2 — GUI-Hotfix Revert (ERLEDIGT)
+
+- [x] Revert von Patch B aus v0.7.1: `stdin=subprocess.DEVNULL` aus `subprocess.Popen` in `install-rog-fan-gui.py` entfernt. Hat den Polkit-GTK-Auth-Agenten am `gtk_init` zerlegt (DISPLAY-/FD-Vererbung gestört), wodurch Install und Uninstall mit Exit-Code 1 noch vor der eigentlichen Skript-Logik scheiterten.
+- [x] Patch A (`[[ -t 0 && -t 1 ]]` in `install-rog-fan.sh`) bleibt drin und fixt den Uninstall-Hang weiterhin zuverlässig.
+- [x] Verifiziert: Install + Uninstall via GUI laufen sauber durch, asusctl bleibt im GUI-Pfad korrekt installiert.
+- [x] Lesson Learned: Bei pkexec-Aufrufen `stdin`/`stdout`/`stderr` möglichst unangetastet lassen — Polkit-Auth-Agenten sind empfindlich gegen FD-Manipulation.
+
 ---
 
 ## Track 3: Übergreifend
@@ -224,3 +238,22 @@
 - **Fix:** Neuer Helper `user_systemctl()` in `install-rog-fan.sh` (Zeilen 311–355). Setzt `XDG_RUNTIME_DIR` + `DBUS_SESSION_BUS_ADDRESS`, prüft User-Bus-Socket, startet bei Bedarf `user@UID.service`, leitet echte Fehlermeldungen durch.
 - **Touched:** Install-Path (Zeilen 814–815) und Uninstall-Path (Zeile 377) nutzen jetzt den Helper statt direkter `sudo -u … systemctl --user`-Aufrufe.
 - **Betroffene Datei:** `install-rog-fan.sh` (CLI- und GUI-Installer-Pfad gleichermaßen abgedeckt). README EN/DE: Troubleshooting-Zeile + Changelog-Eintrag ergänzt.
+
+### 2026-06-06 (Hotfix v1.0.2)
+
+- **Bug 1 — Fan-Hotkey-OSD zeigt ANSI-gefärbten Fehlertext `asusd is not running …`:**
+  - Ursache lokalisiert in `rog-fan-keyd.py` Zeile 91: `return r.returncode == 0, (r.stdout or r.stderr).strip()` reichte asusctl-stderr (inkl. `\x1b[0;31m`-Sequenzen) als „Erfolgsausgabe" durch. `get_current_profile()` fiel danach auf `out.strip().capitalize()` zurück und gab den Warntext als vermeintlichen Profilnamen an `OSDWindow.show_profile()` — Pango escaped den Text, ANSI-Bytes überleben jedoch sichtbar.
+  - **Fix:** `run_asusctl()` liefert jetzt `(ok, stdout, stderr)` getrennt und filtert ANSI per `ANSI_RE`. `get_current_profile()` akzeptiert ausschließlich `Quiet|Balanced|Performance` (kein Free-Text-Fallback mehr). `OSDWindow.show_profile()` strippt defensiv ANSI und verwirft unbekannte Profile.
+- **Bug 2 — `install-rog-fan-gui.py` wirft `KeyboardInterrupt`-Traceback bei Ctrl+C:**
+  - Ursache: kein eigener SIGINT-Handler → PyGObject `_ossighelper.register_sigint_fallback` ruft `signal.default_int_handler` auf, das den Traceback in `gi/_ossighelper.py:237` zeigt.
+  - **Fix:** `GLib.unix_signal_add(SIGINT|SIGTERM, → Gtk.main_quit)` in neuem `_install_sigint_handler()`, plus `try/except KeyboardInterrupt` um `Gtk.main()`.
+- **Betroffene Dateien:** `rog-fan-keyd.py` (v0.6 → v0.6.1), `install-rog-fan-gui.py`.
+
+### 2026-06-06 (Installer-Härtung: User-Unit Persistenz nach Reboot)
+
+- **Symptom:** GUI-Installer läuft erfolgreich durch, aber nach Reboot ist `rog-fan-keyd.service` (User-Unit) nicht aktiv → Fan-Hotkey ohne Funktion bis manuelle Re-Aktivierung.
+- **Fix A — `rog-fan-keyd.service` Z. 14:** `WantedBy=graphical-session.target` → `WantedBy=default.target`. Der `graphical-session.target`-Symlink im User-WantedBy-Dir überlebt einen Reboot nicht zuverlässig; `default.target` ist die kanonische User-Bus-Boot-Stufe.
+- **Fix B — `install-rog-fan.sh` Z. 814–817:** Idempotenter Guard `loginctl show-user … | grep Linger=yes || loginctl enable-linger "$INSTALL_USER"` direkt vor `user_systemctl enable --now rog-fan-keyd.service`. Ohne Linger startet die User-systemd-Instanz erst beim Login → Enable ist persistent, Aktivierung aber nicht.
+- **Post-Install-Sanity-Check — `install-rog-fan.sh` Z. 864–869:** WARN-Ausgabe (bilingual) falls `rog-fan-boot.service` (system) oder User-`rog-fan-keyd.service` nach Install nicht `enabled` + `active` sind. Macht künftige Regressionen sofort sichtbar.
+- **Anfangsverdacht widerlegt:** „fehlendes `daemon-reload`" — `systemctl daemon-reload` bzw. `--user daemon-reload` waren vor beiden Service-Enables bereits gesetzt.
+- **Betroffene Dateien:** `rog-fan-keyd.service`, `install-rog-fan.sh`.

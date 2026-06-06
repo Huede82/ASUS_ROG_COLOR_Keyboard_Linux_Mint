@@ -7,6 +7,7 @@ Track 2 v0.7
 import os
 import re
 import shutil
+import signal
 import subprocess
 import threading
 
@@ -17,7 +18,7 @@ from gi.repository import Gtk, GLib, Gdk, Pango
 # ── Konstanten ────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 INSTALLER   = os.path.join(SCRIPT_DIR, "install-rog-fan.sh")
-VERSION     = "0.7"
+VERSION     = "0.7.2"
 LANG_DEFAULT = os.environ.get("ROG_LANG", "de").lower()
 if LANG_DEFAULT not in ("de", "en"):
     LANG_DEFAULT = "de"
@@ -517,6 +518,21 @@ class InstallerWindow(Gtk.Window):
         return False
 
 
+def _install_sigint_handler():
+    # Sauberer Exit bei Ctrl+C im Terminal: GLib.unix_signal_add hängt sich
+    # in den GTK-Mainloop ein, anstatt PyGObjects Default-Handler den
+    # KeyboardInterrupt-Traceback aus _ossighelper.py werfen zu lassen.
+    def _quit():
+        Gtk.main_quit()
+        return GLib.SOURCE_REMOVE
+    try:
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, _quit)
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, _quit)
+    except (AttributeError, ValueError):
+        # Fallback für sehr alte GLib-Versionen: Python-Handler
+        signal.signal(signal.SIGINT, lambda *_: Gtk.main_quit())
+
+
 def main():
     _load_css()
     win = InstallerWindow()
@@ -531,7 +547,12 @@ def main():
     # set_no_show_all wieder aktivieren, damit hide() persistiert
     # (verhindert dass spätere show_all-Calls den verstecken Bereich wieder zeigen)
     # bleibt aber off, weil wir es im _set_running_ui sowieso explizit toggeln
-    Gtk.main()
+    _install_sigint_handler()
+    try:
+        Gtk.main()
+    except KeyboardInterrupt:
+        # Belt-and-braces, falls SIGINT doch hochgereicht wird
+        pass
 
 
 if __name__ == "__main__":

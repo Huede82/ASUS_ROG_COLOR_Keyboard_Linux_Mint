@@ -83,6 +83,27 @@ Weitere Leitplanken:
 
 ---
 
+## Lessons Learned
+
+### Polkit-Auth-Agent & FD-/Env-Vererbung bei `pkexec` aus GUIs (Track 2, v0.7.1 → v0.7.2)
+
+- **Symptom:** Beim Start eines Bash-Skripts via `pkexec` aus einem Python/GTK-Wrapper bricht der Polkit-GTK-Auth-Agent im `gtk_init` mit „Einlesen der Argumente schlug fehl: Anzeige kann nicht geöffnet werden" ab — kein Passwort-Dialog, `pkexec` liefert Exit 127.
+- **Ursache:** Der Wrapper hatte `subprocess.Popen(..., stdin=subprocess.DEVNULL, ...)` gesetzt. Der Polkit-Auth-Agent findet die aktive Session und das `DISPLAY`/`XAUTHORITY` über die vom aufrufenden Prozess **geerbten FDs und Environment-Variablen** — werden diese durch `DEVNULL` oder ein gesäubertes `env=` abgeschnitten, kann der GTK-Agent kein Display öffnen.
+- **Regel für GUI-Wrapper, die `pkexec <script>` starten:**
+  - Nur `stdout=subprocess.PIPE` + `stderr=subprocess.STDOUT` setzen, **`stdin` unangetastet lassen** (keine `DEVNULL`-Umleitung).
+  - **Kein** eigenes `env=`-Dict übergeben — Vererbung von `DISPLAY`, `XAUTHORITY`, `XDG_*`, `DBUS_SESSION_BUS_ADDRESS` ist Pflicht.
+  - Interaktive `read`-Prompts im gerufenen Bash-Skript dürfen **nicht** unbedingt laufen — über TTY-Check absichern, z.B.:
+    ```bash
+    if [[ -t 0 && -t 1 ]]; then
+        read -rp "Frage: " antwort
+    else
+        antwort="default"
+    fi
+    ```
+- **Merksatz:** `pkexec` braucht eine möglichst „normale" Prozess-Umgebung des Aufrufers, damit Polkit den passenden Auth-Agenten der aktuellen Desktop-Session findet. Jede Manipulation an FDs/Env ist Risiko — nur bewusst und minimal eingreifen.
+
+---
+
 ## Co-Autoren
 
 - **Martin "Der Lemming" Hütter** — Owner, Hardware-Tester, Endabnehmer

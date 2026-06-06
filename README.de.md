@@ -206,9 +206,15 @@ Häufige Fälle:
 | Symptom | Fix |
 |---|---|
 | Fan-Key tut nichts | Neu einloggen — `groups \| grep input` sollte `input` zeigen |
+| Fan-Key bleibt nach GUI-Install tot | Im aktuellen Build behoben (siehe Changelog). Auf älteren Installationen: `systemctl --user enable --now rog-fan-keyd.service` |
 | OSD nicht sichtbar | Compositor nötig (Cinnamon/GNOME ok) |
 | Profil setzt sich nach Suspend zurück | `systemctl status rog-fan-resume.service` prüfen |
 | asusd startet nicht (203/EXEC) | Symlinks: `sudo ln -sf /usr/local/bin/asusd /usr/bin/asusd` |
+
+### Changelog
+
+**2026-06-06 — Fixed**
+- `rog-fan-keyd.service` wurde bei Installation über die GUI (`pkexec`) nicht automatisch aktiviert. Ein neuer Helper `user_systemctl()` in `install-rog-fan.sh` setzt jetzt zuverlässig `DBUS_SESSION_BUS_ADDRESS` und `XDG_RUNTIME_DIR`, startet bei Bedarf `user@UID.service` und zeigt echte Fehlermeldungen, statt sie mit `2>/dev/null` zu verschlucken.
 
 ---
 

@@ -206,9 +206,15 @@ Common ones:
 | Symptom | Fix |
 |---|---|
 | Fan key does nothing | Re-login needed — `groups \| grep input` should show `input` |
+| Fan key still dead after GUI install | Fixed in current build (see Changelog). On older installs: `systemctl --user enable --now rog-fan-keyd.service` |
 | OSD invisible | Needs a compositor (Cinnamon/GNOME OK) |
 | Profile reverts after suspend | check `systemctl status rog-fan-resume.service` |
 | asusd won't start (203/EXEC) | symlinks: `sudo ln -sf /usr/local/bin/asusd /usr/bin/asusd` |
+
+### Changelog
+
+**2026-06-06 — Fixed**
+- `rog-fan-keyd.service` was not auto-activated when installing via the GUI (`pkexec`). A new `user_systemctl()` helper in `install-rog-fan.sh` now reliably sets `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR`, starts `user@UID.service` on demand, and surfaces real errors instead of swallowing them with `2>/dev/null`.
 
 ---
 

@@ -125,6 +125,10 @@
 - [x] End-to-End-Test auf G713QM (alle Profile, Suspend/Resume, Boot, Konflikt-Szenarien)
 - [ ] **Repo-Umbenennung erwägen:** `ASUS_ROG_COLOR_Keyboard_Linux_Mint` → `ASUS_ROG_Suite_Linux_Mint` (optional, Track 3)
 
+### v1.0.1 — Hotfix Installer (ERLEDIGT)
+
+- [x] Bugfix: `rog-fan-keyd`-Service-Aktivierung unter `pkexec` (neuer `user_systemctl()`-Helper in `install-rog-fan.sh`)
+
 ---
 
 ## Track 3: Übergreifend
@@ -213,3 +217,10 @@
   - Repo-Umbenennung `ASUS_ROG_COLOR_Keyboard_Linux_Mint` → `ASUS_ROG_Suite_Linux_Mint`
   - Meta-Installer `install-rog-suite.sh`
   - Gemeinsames `rog-diagnose.sh`
+
+### 2026-06-06 (Hotfix v1.0.1)
+
+- **Bug:** Bei Installation über `install-rog-fan-gui.py` (pkexec) blieb `rog-fan-keyd.service` `inactive (dead)`. `systemctl --user enable --now` schlug still fehl, weil `DBUS_SESSION_BUS_ADDRESS` in der pkexec-Umgebung nicht gesetzt war und Fehler durch `2>/dev/null` verschluckt wurden. Konsequenz: Fan-Taste ohne Funktion nach GUI-Install.
+- **Fix:** Neuer Helper `user_systemctl()` in `install-rog-fan.sh` (Zeilen 311–355). Setzt `XDG_RUNTIME_DIR` + `DBUS_SESSION_BUS_ADDRESS`, prüft User-Bus-Socket, startet bei Bedarf `user@UID.service`, leitet echte Fehlermeldungen durch.
+- **Touched:** Install-Path (Zeilen 814–815) und Uninstall-Path (Zeile 377) nutzen jetzt den Helper statt direkter `sudo -u … systemctl --user`-Aufrufe.
+- **Betroffene Datei:** `install-rog-fan.sh` (CLI- und GUI-Installer-Pfad gleichermaßen abgedeckt). README EN/DE: Troubleshooting-Zeile + Changelog-Eintrag ergänzt.

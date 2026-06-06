@@ -308,6 +308,51 @@ require_root() {
     fi
 }
 
+# ── User-Systemctl-Helper ────────────────────────────────────
+# Führt `systemctl --user ...` zuverlässig als $INSTALL_USER aus, auch wenn
+# der Installer über pkexec/sudo läuft. Setzt XDG_RUNTIME_DIR UND
+# DBUS_SESSION_BUS_ADDRESS, prüft ob der User-Bus überhaupt erreichbar ist,
+# und gibt echte Fehler aus (anstatt sie nach /dev/null zu werfen).
+#
+# Usage: user_systemctl daemon-reload
+#        user_systemctl enable --now rog-fan-keyd.service
+# Rückgabe: 0 = Erfolg, 1 = Fehler (Fehlermeldung auf stderr)
+user_systemctl() {
+    local uid runtime_dir bus_socket out rc
+    uid="$(id -u "$INSTALL_USER")"
+    runtime_dir="/run/user/$uid"
+    bus_socket="$runtime_dir/bus"
+
+    if [[ ! -d "$runtime_dir" ]]; then
+        echo "user_systemctl: $runtime_dir nicht vorhanden — $INSTALL_USER hat keine aktive Login-Session" >&2
+        return 1
+    fi
+    if [[ ! -S "$bus_socket" ]]; then
+        # systemd-user-manager läuft nicht — starten und kurz warten
+        systemctl start "user@${uid}.service" 2>/dev/null || true
+        local i=0
+        while [[ ! -S "$bus_socket" && $i -lt 20 ]]; do
+            sleep 0.1
+            i=$((i + 1))
+        done
+        if [[ ! -S "$bus_socket" ]]; then
+            echo "user_systemctl: User-Bus $bus_socket nicht erreichbar (systemd-user-manager nicht aktiv)" >&2
+            return 1
+        fi
+    fi
+
+    out=$(runuser -u "$INSTALL_USER" -- env \
+        XDG_RUNTIME_DIR="$runtime_dir" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=$bus_socket" \
+        systemctl --user "$@" 2>&1)
+    rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo "user_systemctl ($*) fehlgeschlagen (rc=$rc):" >&2
+        echo "$out" | sed 's/^/    /' >&2
+    fi
+    return $rc
+}
+
 # ── Deinstallation ───────────────────────────────────────────
 uninstall() {
     print_header
@@ -329,8 +374,7 @@ uninstall() {
     # Fan-Hotkey-Daemon (User-Service)
     USER_SVC_DIR="$INSTALL_HOME/.config/systemd/user"
     if [[ -f "$USER_SVC_DIR/rog-fan-keyd.service" ]]; then
-        sudo -u "$INSTALL_USER" XDG_RUNTIME_DIR="/run/user/$(id -u "$INSTALL_USER")" \
-            systemctl --user disable --now rog-fan-keyd.service 2>/dev/null || true
+        user_systemctl disable --now rog-fan-keyd.service || true
         rm -f "$USER_SVC_DIR/rog-fan-keyd.service"
     fi
     # Suite-Binaries
@@ -767,11 +811,8 @@ mkdir -p "$USER_SVC_DIR"
 if [[ -f "$SCRIPT_DIR/rog-fan-keyd.service" ]]; then
     install -Dm644 "$SCRIPT_DIR/rog-fan-keyd.service" "$USER_SVC_DIR/rog-fan-keyd.service"
     chown -R "$INSTALL_USER:$INSTALL_USER" "$INSTALL_HOME/.config/systemd"
-    # Service als User aktivieren (über sudo-su Trick, da wir als root laufen)
-    if sudo -u "$INSTALL_USER" XDG_RUNTIME_DIR="/run/user/$(id -u "$INSTALL_USER")" \
-        systemctl --user daemon-reload 2>/dev/null && \
-       sudo -u "$INSTALL_USER" XDG_RUNTIME_DIR="/run/user/$(id -u "$INSTALL_USER")" \
-        systemctl --user enable --now rog-fan-keyd.service 2>/dev/null; then
+    if user_systemctl daemon-reload && \
+       user_systemctl enable --now rog-fan-keyd.service; then
         ok "$T_KEYD_SERVICE_OK"
     else
         warn "$T_KEYD_SERVICE_FAIL"

@@ -80,25 +80,40 @@ ROG_LANG=de rog-fan status
 
 ## 🚀 Quick Install
 
+### One-command Suite install (recommended)
+
+Install **both** Fan + RGB modules at once:
+
 ```bash
 git clone https://github.com/Huede82/ASUS_ROG_COLOR_Keyboard_Linux_Mint.git
 cd ASUS_ROG_COLOR_Keyboard_Linux_Mint
 
-# Fan control + asusctl + Hotkey-Daemon + GUI:
-sudo bash install-rog-fan.sh
+# CLI: Full suite (RGB → Fan order)
+sudo bash install-rog-suite.sh
 
-# RGB keyboard (separate module):
-sudo bash install-rog-rgb.sh
+# Or GUI: GTK3 Meta-Installer with live log
+python3 install-rog-suite-gui.py
 ```
+
+Flags: `--rgb-only`, `--fan-only`, `--uninstall`, `--lang de|en`
 
 After install: **log out once and back in** (for the `input` group to activate, needed by the Fan-Key daemon).
 
-### Prefer a GUI?
+### Install modules separately
+
+If you only need Fan **or** RGB:
+
 ```bash
-python3 install-rog-fan-gui.py
-python3 install-rog-rgb-gui.py
+# Fan control + asusctl + Hotkey-Daemon + GUI:
+sudo bash install-rog-fan.sh
+# Or: python3 install-rog-fan-gui.py
+
+# RGB keyboard (separate module):
+sudo bash install-rog-rgb.sh
+# Or: python3 install-rog-rgb-gui.py
 ```
-Both installers run via `pkexec`, show live progress and the full log.
+
+All installers run via `pkexec` (GUI) or `sudo` (CLI), show live progress and the full log.
 
 ---
 
@@ -143,6 +158,7 @@ This suite fills that gap: **install once, everything just works** — Fan-Key i
 │    rog-fan-keyd (Fan key → OSD)                         │
 ├─────────────────────────────────────────────────────────┤
 │  Installers & diagnostics                               │
+│    install-rog-suite(.sh|-gui.py) — unified installer   │
 │    install-rog-fan(.sh|-gui.py)                         │
 │    install-rog-rgb(.sh|-gui.py)                         │
 │    rog-fan-diagnose · rog-kbd-diagnose · rog-fan-audit  │
@@ -185,6 +201,10 @@ systemd services installed:
 ## 🗑 Uninstall
 
 ```bash
+# Uninstall both modules (reverse order: Fan → RGB):
+sudo bash install-rog-suite.sh --uninstall
+
+# Or uninstall individually:
 sudo bash install-rog-fan.sh --uninstall
 sudo bash install-rog-rgb.sh --uninstall
 ```
@@ -213,7 +233,14 @@ Common ones:
 
 ### Changelog
 
-**2026-06-06 — Fixed**
+**2026-06-06 — Track 3 v2.0: Suite Meta-Installer**
+- **`install-rog-suite.sh`** — CLI meta-installer orchestrates RGB + Fan modules with `--rgb-only`, `--fan-only`, `--uninstall`, `--lang de|en` flags. Install order: RGB → Fan. Uninstall order: Fan → RGB (reverse). Thin wrapper without logic duplication.
+- **`install-rog-suite-gui.py`** — GTK3 GUI meta-installer with module checkboxes (RGB/Fan), uninstall mode toggle, DE/EN language selector, live log in Catppuccin Mocha theme. Calls `install-rog-suite.sh` via `pkexec`. Respects lessons learned from v0.7.1/v0.7.2 (`stdin` handling).
+
+**2026-06-06 — Track 2 v0.6.2: rog-fan-keyd Auto-Reconnect**
+- **`rog-fan-keyd`** now survives USB disconnect, suspend/resume, and `eventX` re-enumeration. Exponential backoff reconnect loop: 1s → 2s → 5s → 10s (repeats indefinitely). No more daemon crashes when laptop wakes from suspend.
+
+**2026-06-06 — Fixed (v0.7.2)**
 - `rog-fan-keyd.service` was not auto-activated when installing via the GUI (`pkexec`). A new `user_systemctl()` helper in `install-rog-fan.sh` now reliably sets `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR`, starts `user@UID.service` on demand, and surfaces real errors instead of swallowing them with `2>/dev/null`.
 
 ---

@@ -11,4 +11,4 @@ RestartSec=3
 Environment=ROG_LANG=de
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target

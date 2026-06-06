@@ -3,9 +3,11 @@
 rog-fan-keyd — ROG Fan-Hotkey Daemon mit OSD
 Lauscht auf KEY_PROG4 (Fan-Taste) und rotiert das Profil via asusctl,
 zeigt 2s-OSD beim Wechsel an.
-Track 2 v0.6
+Track 2 v0.6.2
 """
+import errno
 import os
+import re
 import sys
 import math
 import subprocess
@@ -25,8 +27,12 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, Gdk  # noqa: E402
 
 # === Const ===
-VERSION = '0.6'
+VERSION = '0.6.2'
 LANG = os.environ.get('ROG_LANG', 'de').lower()
+# CSI/SGR ANSI-Escape-Sequenzen — asusctl färbt Fehlertexte ein, die wir
+# weder ins Log noch ins OSD durchreichen dürfen.
+ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+VALID_PROFILES = ('Quiet', 'Balanced', 'Performance')
 TARGET_KEY = ecodes.KEY_PROG4   # code 203
 DEBOUNCE_S = 0.4
 OSD_DURATION_MS = 2000
@@ -79,28 +85,50 @@ T = T_DE if LANG == 'de' else T_EN
 
 
 # === Helpers ===
+def _strip_ansi(s):
+    if not s:
+        return ''
+    return ANSI_RE.sub('', s)
+
+
 def log(msg):
-    print(f"[rog-fan-keyd] {msg}", flush=True)
+    print(f"[rog-fan-keyd] {_strip_ansi(str(msg))}", flush=True)
 
 
 def run_asusctl(*args, timeout=3):
+    """Run asusctl and return (ok, stdout_text, stderr_text), ANSI-stripped.
+
+    stdout and stderr are kept separate on purpose: previously we merged
+    them via `(stdout or stderr)`, which leaked the red `asusd is not
+    running …` warning into the OSD whenever stdout happened to be empty.
+    """
     try:
         r = subprocess.run(['asusctl', *args],
                            capture_output=True, text=True, timeout=timeout)
-        return r.returncode == 0, (r.stdout or r.stderr).strip()
+        return (r.returncode == 0,
+                _strip_ansi(r.stdout).strip(),
+                _strip_ansi(r.stderr).strip())
     except Exception as e:
-        return False, str(e)
+        return False, '', _strip_ansi(str(e))
 
 
 def get_current_profile():
-    ok, out = run_asusctl('profile', 'get')
+    ok, out, err = run_asusctl('profile', 'get')
     if not ok:
+        if err:
+            log(f"profile get failed: {err}")
         return None
+    # Only accept whitelisted profile names — never return arbitrary text
+    # so stray asusctl output cannot reach the OSD title.
     for line in out.splitlines():
-        for p in ('Quiet', 'Balanced', 'Performance'):
+        for p in VALID_PROFILES:
             if p in line:
                 return p
-    return out.strip().capitalize() if out.strip() else None
+    stripped = out.strip()
+    for p in VALID_PROFILES:
+        if p.lower() == stripped.lower():
+            return p
+    return None
 
 
 def write_last_profile(profile_cap):
@@ -204,12 +232,14 @@ class OSDWindow(Gtk.Window):
         self.add(outer)
 
     def show_profile(self, profile_cap):
-        meta = PROFILE_META.get(profile_cap, {
-            'rgb': (0.97, 0.45, 0.09),
-            'icon': '•',
-        })
+        # Defense in depth: never let an ANSI-coloured string reach Pango.
+        profile_cap = _strip_ansi(str(profile_cap)).strip()
+        if profile_cap not in PROFILE_META:
+            log(f"show_profile: ignoring unknown profile {profile_cap!r}")
+            return
+        meta = PROFILE_META[profile_cap]
         self._accent_rgb = meta['rgb']
-        accent_hex = PROFILE_META.get(profile_cap, {}).get('hex', '#f97316')
+        accent_hex = meta['hex']
         self._current_profile = profile_cap
 
         self._icon_label.set_markup(
@@ -257,6 +287,7 @@ class FanKeyDaemon:
         self.osd = OSDWindow()
         self.devices = []
         self.last_trigger = 0.0
+        self._stop = threading.Event()
         self._scan_devices()
 
     def _scan_devices(self):
@@ -273,6 +304,31 @@ class FanKeyDaemon:
             except Exception:
                 continue
 
+    def _find_device(self, name, phys):
+        for path in list_devices():
+            try:
+                dev = InputDevice(path)
+            except Exception:
+                continue
+            try:
+                caps = dev.capabilities().get(ecodes.EV_KEY, [])
+                if TARGET_KEY not in caps:
+                    dev.close()
+                    continue
+                dev_phys = getattr(dev, 'phys', '') or ''
+                if dev.name == name and (not phys or dev_phys == phys):
+                    return dev
+                dev.close()
+            except Exception:
+                try:
+                    dev.close()
+                except Exception:
+                    pass
+        return None
+
+    def stop(self):
+        self._stop.set()
+
     def start(self):
         if not self.devices:
             log(T['err_no_devices'])
@@ -282,32 +338,77 @@ class FanKeyDaemon:
                                  args=(dev,), daemon=True)
             t.start()
 
+    def _reconnect(self, name, phys):
+        backoff = (1, 2, 5)
+        idx = 0
+        while not self._stop.is_set():
+            delay = backoff[idx] if idx < len(backoff) else 10
+            if self._stop.wait(delay):
+                return None
+            try:
+                dev = self._find_device(name, phys)
+            except Exception as e:
+                log(f"[reconnect] scan error for {name!r}: {e}")
+                dev = None
+            if dev is not None:
+                return dev
+            idx += 1
+        return None
+
     def _read_loop(self, dev):
-        try:
-            for event in dev.read_loop():
-                if (event.type == ecodes.EV_KEY
-                        and event.code == TARGET_KEY
-                        and event.value == 1):
-                    GLib.idle_add(self._on_keypress)
-        except OSError as e:
-            log(f"Device {dev.path} disconnected: {e}")
-        except Exception as e:
-            log(f"read_loop error on {dev.path}: {e}")
+        name = dev.name
+        phys = getattr(dev, 'phys', '') or ''
+        path = dev.path
+        while not self._stop.is_set():
+            try:
+                for event in dev.read_loop():
+                    if self._stop.is_set():
+                        return
+                    if (event.type == ecodes.EV_KEY
+                            and event.code == TARGET_KEY
+                            and event.value == 1):
+                        GLib.idle_add(self._on_keypress)
+            except OSError as e:
+                if e.errno in (errno.ENODEV, errno.EBADF):
+                    log(f"Device {path} disconnected: {e}")
+                    try:
+                        dev.close()
+                    except Exception:
+                        pass
+                    if dev in self.devices:
+                        self.devices.remove(dev)
+                    # ENODEV/EBADF after suspend/resume or USB re-enum — wait & rebind by name/phys
+                    new_dev = self._reconnect(name, phys)
+                    if new_dev is None:
+                        return
+                    dev = new_dev
+                    path = dev.path
+                    self.devices.append(dev)
+                    log(f"[reconnect] OK: {path} ({dev.name})")
+                    continue
+                log(f"Device {path} read error: {e}")
+                return
+            except Exception as e:
+                log(f"read_loop error on {path}: {e}")
+                return
 
     def _on_keypress(self):
         now = time.monotonic()
         if now - self.last_trigger < DEBOUNCE_S:
             return False
         self.last_trigger = now
-        ok, _ = run_asusctl('profile', 'next')
+        ok, _out, err = run_asusctl('profile', 'next')
         if not ok:
-            log("profile next failed")
+            log(f"profile next failed: {err or 'unknown error'}")
             return False
         time.sleep(0.15)
         prof = get_current_profile()
         if prof:
             write_last_profile(prof)
             self.osd.show_profile(prof)
+        else:
+            log("profile next succeeded but current profile could not be "
+                "determined — OSD suppressed")
         return False
 
 
@@ -330,6 +431,7 @@ def main():
 
     def _on_signal(signum, frame):
         log(T['log_stopping'])
+        daemon.stop()
         GLib.idle_add(Gtk.main_quit)
 
     signal.signal(signal.SIGTERM, _on_signal)

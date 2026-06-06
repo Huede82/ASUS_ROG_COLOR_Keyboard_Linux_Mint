@@ -1,297 +1,242 @@
-# ⚡ ROG RGB — Keyboard Backlight Control for Linux
+<div align="center">
 
-> Full RGB control for ASUS ROG N-KEY laptop keyboards under Linux Mint / Ubuntu
+# 🎮 ROG Linux Suite
 
-🌐 **Language / Sprache:** [🇬🇧 English](README.md) · [🇩🇪 Deutsch](README.de.md)
+### Fan control & RGB keyboard for ASUS ROG laptops on Linux Mint
 
----
+**Because the Armoury Crate equivalent simply doesn't exist on Linux.**
 
-| | |
-|---|---|
-| **Version** | 1.0 |
-| **Date** | 2026-06-05 |
-| **Author** | Martin "Der Lemming" Hütter |
-| **Co-Author** | GitHub Copilot (Claude Sonnet 4.6) |
-| **Lizenz** | MIT |
-| **Platform** | Linux Mint 22.x / Ubuntu 24.04 · Kernel ≥ 5.11 |
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Bash](https://img.shields.io/badge/Bash-5.x-4EAA25?logo=gnubash&logoColor=white)]()
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)]()
+[![GTK](https://img.shields.io/badge/GTK-3-7C9CCC?logo=gtk&logoColor=white)]()
+[![Linux Mint](https://img.shields.io/badge/Linux_Mint-22.x-87CF3E?logo=linuxmint&logoColor=white)]()
 
----
+🇬🇧 English · [🇩🇪 Deutsch](README.de.md)
 
-## Contents
-
-- [Background](#background)
-- [System Requirements](#system-requirements)
-- [Installation](#installation)
-- [Project Files](#project-files)
-- [Usage](#usage)
-  - [Graphical GUI](#graphical-gui)
-  - [Terminal Control](#terminal-control)
-  - [Diagnostic Tool](#diagnostic-tool)
-- [Autostart & Suspend/Resume](#autostart--suspendresume)
-- [Uninstallation](#uninstallation)
-- [Technical Background](#technical-background)
-- [Known Quirks](#known-quirks)
+</div>
 
 ---
 
-## Background
+## 👤 Is this for you?
 
-ASUS ROG laptops use a proprietary **N-KEY USB HID device** (USB `0b05:1866`) für die RGB-Tastaturbeleuchtung.  
-Linux includes a kernel driver (`hid_asus`) that exposes a basic brightness interface at `/sys/class/leds/asus::kbd_backlight/` — but actual **color control** requires direct USB HID control transfers.
+✅ You have an **ASUS ROG Strix G713QM** (or similar Ryzen + asus-wmi based ROG laptop)
+✅ You run **Linux Mint 22.x** or another Ubuntu 24.04-based distro (`noble`)
+✅ Your **fans never spin** at full load · your **RGB keyboard is stuck**
+✅ You want a **one-command install** that actually works · with a **GUI installer too**
 
-Das Tool [rogauracore](https://github.com/wroberts/rogauracore) übernimmt diese Kommunikation.  
-Dieses Projekt stellt eine komfortable Steuerungsebene darüber bereit:
-eine **grafische GUI**, ein **Terminal-Wrapper** und ein **Diagnose-Tool**.
-
----
-
-## System Requirements
-
-| Anforderung | Version / Paket |
-|---|---|
-| Linux Kernel | ≥ 5.11 (full N-KEY support) |
-| Distribution | Ubuntu 24.04 / Linux Mint 22.x (apt-basiert) |
-| Python | 3.10+ |
-| GTK | `python3-gi`, `gir1.2-gtk-3.0`, `python3-gi-cairo` |
-| Build Tools | `gcc`, `make`, `autoconf`, `automake`, `libtool` |
-| USB | `libusb-1.0-0-dev`, `libhidapi-dev` |
+> The reference machine is a Strix G713QM, but most ROG laptops supported by [asusctl](https://gitlab.com/asus-linux/asusctl) should work. PRs welcome for other models.
 
 ---
 
-## Installation
+## ✨ What you get
 
-### Option A: Graphical Installer (recommended)
+<table>
+<tr>
+<td width="50%" valign="top">
 
+### 🌬 Fan / Thermal Control
+- Three profiles: **Quiet · Balanced · Performance**
+- **Fan-Key support** with 2s OSD overlay
+- Live RPM + CPU temp + AC/Battery in GUI
+- Suspend/Resume + Boot profile restore
+- Custom fan curves (CPU / GPU / Mid)
+
+</td>
+<td width="50%" valign="top">
+
+### 🎨 RGB Keyboard Control
+- Static colors, breathe, rainbow, cycle
+- Color picker GUI with live preview
+- Suspend/Resume color restore
+- Direct USB HID via rogauracore (no daemon)
+- Hex / named colors / brightness levels
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🧪 Diagnostics included
+- `rog-fan-diagnose` — 10-section troubleshooter with `--fix`
+- `rog-kbd-diagnose` — RGB-side equivalent
+- `rog-fan-audit` — read-only hardware probe
+
+</td>
+<td valign="top">
+
+### 🌍 Bilingual everywhere
+All tools and installers speak **English** and **German**:
 ```bash
-cd "ROG Scripts"
-python3 install-rog-rgb-gui.py
+ROG_LANG=en rog-fan status
+ROG_LANG=de rog-fan status
 ```
 
-The graphical installer guides you through a 5-page wizard:
+</td>
+</tr>
+</table>
 
-| Page | Content |
-|---|---|
-| Welcome | Overview of the three phases |
-| Diagnostics | Animated check of hardware, modules, and tools |
-| Plan | What will be installed / skipped / updated |
-| Installation | Progress bar + live log + password input |
-| Done | Result, button to launch the RGB GUI directly |
+---
 
-### Option B: Terminal Installer
+## 🚀 Quick Install
 
 ```bash
-# Ins Projektverzeichnis wechseln
-cd "ROG Scripts"
+git clone https://github.com/Huede82/ASUS_ROG_COLOR_Keyboard_Linux_Mint.git
+cd ASUS_ROG_COLOR_Keyboard_Linux_Mint
 
-# Sorglos-Installations-Script ausführen (installiert alles automatisch)
+# Fan control + asusctl + Hotkey-Daemon + GUI:
+sudo bash install-rog-fan.sh
+
+# RGB keyboard (separate module):
 sudo bash install-rog-rgb.sh
 ```
 
-The script performs these steps automatically:
+After install: **log out once and back in** (for the `input` group to activate, needed by the Fan-Key daemon).
 
-1. Check system prerequisites (kernel, USB device, apt)
-2. Install dependencies (`git`, `gcc`, `libusb`, `python3-gi`, …)
-3. Build and install `rogauracore` from source
-4. Install `rog-rgb-gui` (GUI) to `/usr/local/bin`
-5. Install `rog-rgb` (terminal wrapper) to `/usr/local/bin`
-6. Install `rog-kbd-diagnose` to `/usr/local/bin`
-7. Set up udev rules for device access without root
-8. Add `sudo` permission for sysfs brightness control
-9. Set up systemd services for autostart and resume
-10. Register `.desktop` entry in the application menu
-11. Run a functional test
-
----
-
-## Project Files
-
-```
-ROG Scripts/
-├── install-rog-rgb-gui.py  # Graphical installer (python3 install-rog-rgb-gui.py)
-├── install-rog-rgb.sh      # Terminal installer (sudo bash install-rog-rgb.sh)
-├── rog-rgb-gui.py          # Graphical GTK3 control GUI
-├── rog-rgb.sh              # Terminal wrapper (local, before installation)
-├── rog-kbd-diagnose.sh     # Diagnostic tool  (local, before installation)
-├── README.md               # This file (English)
-└── README.de.md            # Deutsche Version
-```
-
-After installation, also available system-wide:
-
-```
-/usr/local/bin/rogauracore      # Kern-Backend (USB HID)
-/usr/local/bin/rog-rgb          # Terminal-Steuerung
-/usr/local/bin/rog-rgb-gui      # Grafische GUI
-/usr/local/bin/rog-kbd-diagnose # Diagnose-Tool
-/lib/udev/rules.d/90-rogauracore.rules
-/etc/systemd/system/rog-rgb.service
-/etc/systemd/system/rog-rgb-resume.service
-/etc/sudoers.d/rog-rgb
-~/.local/share/applications/rog-rgb-gui.desktop
-~/.config/rog-rgb/              # Configuration directory
-    ├── last_color              # Last active rogauracore command
-    └── gui_settings.json       # GUI settings (effect, color, brightness, language)
-```
-
----
-
-## Usage
-
-### Graphical GUI
-
+### Prefer a GUI?
 ```bash
-rog-rgb-gui
+python3 install-rog-fan-gui.py
+python3 install-rog-rgb-gui.py
 ```
+Both installers run via `pkexec`, show live progress and the full log.
 
-Or via the application menu: **Settings → ROG RGB Control**.
+---
 
-Language can be switched inside the GUI (DE/EN toggle).
+## 🖥 Usage
 
-**Funktionen der GUI:**
-
-| Area | Description |
+### Terminal
+| Command | What it does |
 |---|---|
-| Color preview | Clickable bar opens GTK color chooser with color wheel and palette |
-| Hex input | Direct color code entry (e.g. `ff0000`) |
-| Quick colors | 12 preset color buttons |
-| Brightness | Slider: Off / 33% / 66% / 100% |
-| Effects | Static · Breathe · Rainbow · Color Cycle · Off |
-| Speed | Slow / Medium / Fast (for animated effects) |
-| Keyboard preview | Live visualization on keyboard silhouette |
-| Live mode | Instant transfer on every change (toggleable) |
-| Apply | Explicit apply + permanent save |
-| Reset | Load saved settings |
+| `rog-fan status` | profile + temps + RPMs + AC/Battery |
+| `rog-fan quiet \| balanced \| performance` | switch profile |
+| `rog-fan watch` | live view |
+| `rog-fan-diagnose` | full troubleshooter |
+| `rog-rgb red \| 00ff00 \| breathe red` | set keyboard color/effect |
+| `rog-rgb status` | current state |
 
----
-
-### Terminal Control
-
-```bash
-# Set color (hex)
-rog-rgb #ff0000
-rog-rgb ff0000
-
-# Named colors
-rog-rgb red
-rog-rgb green
-rog-rgb blue
-rog-rgb cyan
-rog-rgb yellow
-rog-rgb gold
-rog-rgb magenta
-rog-rgb white
-
-# Effects
-rog-rgb breathe ff0000          # Atmen mit Farbe (Geschwindigkeit 2)
-rog-rgb breathe 00aaff 3        # Atmen mit Geschwindigkeit 3
-rog-rgb rainbow                 # Rainbow (speed 2)
-rog-rgb rainbow 1               # Rainbow slow
-rog-rgb cycle                   # Automatic color cycle
-
-# Control
-rog-rgb off                     # Turn off
-rog-rgb status                  # Show status
-rog-rgb restore                 # Restore last saved setting
-```
-
----
-
-### Diagnostic Tool
-
-```bash
-rog-kbd-diagnose
-```
-
-Checks automatically:
-
-1. Kernel version and distro
-2. ASUS N-KEY USB device
-3. Kernel modules (`hid_asus`, `asus_wmi`, `asus_nb_wmi`)
-4. sysfs LED interface (`/sys/class/leds/asus::kbd_backlight`)
-5. HID raw interface and access permissions
-6. asusctl (if installed)
-7. OpenRGB (if installed)
-8. Kernel messages (dmesg) for errors
-9. udev rules
-10. Suspend/resume issues
-
-All found problems are summarized at the end with concrete fix commands.
-
-```bash
-# With automatic brightness fix
-rog-kbd-diagnose --fix
-```
-
----
-
-## Autostart & Suspend/Resume
-
-The installation sets up two systemd services:
-
-| Service | When active |
+### GUI
+| App | Launch |
 |---|---|
-| `rog-rgb.service` | On boot — restores last color |
-| `rog-rgb-resume.service` | After suspend/hibernate/hybrid-sleep |
+| ROG Fan Control | menu → **ROG Fan Control** · or `rog-fan-gui` |
+| ROG RGB Control | menu → **ROG RGB** · or `rog-rgb-gui` |
 
-The last active setting is saved in `~/.config/rog-rgb/last_color`.
-On startup, the service reads this file and restores both brightness and color/effect.
-
-```bash
-# Check service status
-systemctl status rog-rgb.service
-systemctl status rog-rgb-resume.service
-
-# Run manually (for testing)
-sudo systemctl start rog-rgb.service
-```
+### Fan key
+Press the **ROG Fan key** to rotate Quiet → Balanced → Performance. A 2-second OSD pops up. Profile is persisted across reboot and suspend.
 
 ---
 
-## Uninstallation
+## 💡 Why this exists
+
+On Windows, **Armoury Crate** handles fan profiles and RGB out of the box. On Linux there's [asusctl](https://gitlab.com/asus-linux/asusctl) (excellent backend) and [rogauracore](https://github.com/wroberts/rogauracore) (RGB driver) — but no integrated, no-fuss user experience for distros like Linux Mint, especially since the official `asus-linux` PPA stopped supporting Ubuntu 24.04 (`noble`).
+
+This suite fills that gap: **install once, everything just works** — Fan-Key included, OSD included, GUI included, Boot/Resume restore included.
+
+---
+
+## 🛠 Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  User-facing tools                                      │
+│    rog-fan (CLI)    rog-fan-gui (GTK)                   │
+│    rog-rgb (CLI)    rog-rgb-gui (GTK)                   │
+│    rog-fan-keyd (Fan key → OSD)                         │
+├─────────────────────────────────────────────────────────┤
+│  Installers & diagnostics                               │
+│    install-rog-fan(.sh|-gui.py)                         │
+│    install-rog-rgb(.sh|-gui.py)                         │
+│    rog-fan-diagnose · rog-kbd-diagnose · rog-fan-audit  │
+├─────────────────────────────────────────────────────────┤
+│  Backends                                               │
+│    asusctl v6.3.8 (source-built) — DBus xyz.ljones.Asusd│
+│    rogauracore — direct USB HID                         │
+├─────────────────────────────────────────────────────────┤
+│  Kernel                                                 │
+│    asus-nb-wmi · platform_profile · hwmon               │
+└─────────────────────────────────────────────────────────┘
+```
+
+systemd services installed:
+- `asusd.service` (system) — asusctl daemon
+- `rog-fan-boot.service` (system) — profile restore at boot
+- `rog-fan-resume.service` (system) — profile restore after suspend
+- `rog-fan-keyd.service` (user) — Fan-Key listener
+- `rog-rgb-resume.service` (system) — keyboard color restore
+
+---
+
+## 🧰 Compatibility
+
+| | Tested |
+|---|---|
+| Laptop | ASUS ROG Strix G713QM (Ryzen 9 5900HX + Vega iGPU + RTX 3060 Mobile) |
+| OS | Linux Mint 22.3 Cinnamon (Ubuntu 24.04 `noble`) |
+| Kernel | 6.17 (works from 5.15+) |
+| Keyboard USB-ID | `0b05:1866` (N-KEY internal keyboard) |
+| Fan key | `KEY_PROG4` (code 203) |
+
+**Should also work on:** other ROG laptops supported by asusctl (Strix G15/G17, Zephyrus G14/G15, TUF series with platform_profile). Untested — feedback welcome.
+
+**Required kernel modules:** `asus-nb-wmi`, `asus_wmi`
+**Required sysfs:** `/sys/firmware/acpi/platform_profile`, `/sys/devices/platform/asus-nb-wmi/throttle_thermal_policy`
+
+---
+
+## 🗑 Uninstall
 
 ```bash
+sudo bash install-rog-fan.sh --uninstall
 sudo bash install-rog-rgb.sh --uninstall
 ```
 
-Removes: rogauracore, rog-rgb, rog-rgb-gui, rog-kbd-diagnose, systemd services, udev rules, sudo rule, .desktop entry.
+Restores `power-profiles-daemon`, removes binaries, services, sudoers rules, desktop entries. User config in `~/.config/rog-fan/` and `~/.config/rog-rgb/` is kept by default.
 
-> **Note:** The configuration in `~/.config/rog-rgb/` is preserved.  
-> To remove completely: `rm -rf ~/.config/rog-rgb`
+## 🔧 Troubleshooting
 
----
+Run the diagnostics first — they usually find the problem:
 
-## Technical Background
-
-### Why not asusctl?
-
-[asusctl](https://gitlab.com/asus-linux/asusctl) is the official ASUS-Linux tool but only supports Ubuntu LTS with specific PPAs. No compatible PPA is available for Linux Mint 22.3.
-
-### How does rogauracore work?
-
-`rogauracore` communicates directly via **libusb USB control transfer** with the N-KEY device:
-
-```
-Host → USB Control-Transfer (bmRequestType=0x21, bRequest=9) → N-KEY HID
-       ↳ 17-Byte-Nachricht mit Effekt-/Farbdaten
+```bash
+bash rog-fan-diagnose.sh         # full report
+bash rog-fan-diagnose.sh --fix   # apply safe fixes
+bash rog-kbd-diagnose.sh         # RGB side
 ```
 
-Return code `17` means success (= 17 bytes transferred = `MESSAGE_LENGTH`).
+Common ones:
 
-### Brightness quirk
-
-The `rogauracore` access resets the sysfs value `/sys/class/leds/asus::kbd_backlight/brightness` to `0`, because the kernel driver briefly releases the USB interface. The wrapper therefore automatically restores brightness after every HID command.
-
----
-
-## Known Quirks
-
-| Issue | Explanation | Solution |
-|---|---|---|
-| Brightness = 0 after rogauracore | Kernel driver side effect | Corrected automatically |
-| RGB off after suspend | N-KEY loses USB state | `rog-rgb-resume.service` restores it |
-| rogauracore needs sudo | USB device access requires permissions | udev rule + sudoers entry set by installer |
-| fan_curve_get_factory_default error | asus_wmi dmesg message, affects fan curves only | Can be ignored |
+| Symptom | Fix |
+|---|---|
+| Fan key does nothing | Re-login needed — `groups \| grep input` should show `input` |
+| OSD invisible | Needs a compositor (Cinnamon/GNOME OK) |
+| Profile reverts after suspend | check `systemctl status rog-fan-resume.service` |
+| asusd won't start (203/EXEC) | symlinks: `sudo ln -sf /usr/local/bin/asusd /usr/bin/asusd` |
 
 ---
 
-*This project was born from a real problem: the ASUS ROG RGB keyboard stopped working after a fresh Linux Mint installation — and there was no simple, complete tool for diagnosis and repair.*
+## 📊 Tray indicator (optional)
+
+For a live fan-RPM + CPU-temp indicator in your panel, we recommend the community Cinnamon applet **[Sensors@claudiux](https://cinnamon-spices.linuxmint.com/applets/view/337)**:
+> Right-click panel → Applets → Download → search "Sensors" → install `Sensors@claudiux`
+
+---
+
+## 🤝 Contributing
+
+Issues, bug reports and PRs welcome. If you tested this on a different ROG model — please [open an issue](https://github.com/Huede82/ASUS_ROG_COLOR_Keyboard_Linux_Mint/issues) with `lsb_release -a`, `uname -r` and your laptop model.
+
+---
+
+## 📜 Credits
+
+| Project | Used for |
+|---|---|
+| [asusctl](https://gitlab.com/asus-linux/asusctl) | Fan/thermal backend (DBus daemon) |
+| [rogauracore](https://github.com/wroberts/rogauracore) | RGB keyboard USB driver |
+| [Sensors@claudiux](https://cinnamon-spices.linuxmint.com/applets/view/337) | Recommended tray applet |
+
+License: [MIT](LICENSE) · Built by [Huede82](https://github.com/Huede82) with help from GitHub Copilot · 2026
+
+---
+
+<div align="center">
+<sub>If this saved you hours of distro-hopping — a ⭐ on the repo is the best thanks.</sub>
+</div>

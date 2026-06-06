@@ -1,0 +1,14 @@
+[Unit]
+Description=ROG Fan Hotkey Daemon (OSD bei Profilwechsel)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rog-fan-keyd
+Restart=on-failure
+RestartSec=3
+Environment=ROG_LANG=de
+
+[Install]
+WantedBy=graphical-session.target

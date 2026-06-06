@@ -420,7 +420,7 @@ step "$T_STEP_SUDO"
 
 cat > /etc/sudoers.d/rog-rgb << SUDORULE
 # Erlaubt $INSTALL_USER die ROG Tastatur-Helligkeit ohne Passwort zu setzen
-$INSTALL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/leds/asus::kbd_backlight/brightness
+$INSTALL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/leds/asus\:\:kbd_backlight/brightness
 SUDORULE
 
 chmod 440 /etc/sudoers.d/rog-rgb

@@ -1,8 +1,8 @@
 ---
 name: 'Senior-PM'
 description: 'Schreibt Spezifikationen und verwaltet die Dokumente in .brain_files sowie das API-Design.'
-model: 'Claude Opus 4.7'
-tools: ['read', 'search', 'edit']
+model: 'Claude Sonnet 4.5'
+tools: ['search/codebase', 'edit/editFiles', 'search']
 ---
 
 # Rolle & Persona

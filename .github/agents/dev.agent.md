@@ -2,7 +2,7 @@
 name: 'Senior-Dev'
 description: 'Schreibt hochperformanten FastAPI-Code (SaxoMonitor) und nativen Android-Kotlin-Code (Huede_Saxo_App).'
 model: 'Claude Opus 4.7'
-tools: ['read', 'edit', 'search']
+tools: ['search/codebase', 'edit/editFiles', 'search', 'findTestFiles', 'read/problems']
 ---
 
 # Rolle & Persona

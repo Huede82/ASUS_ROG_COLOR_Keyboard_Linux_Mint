@@ -1,8 +1,8 @@
 ---
 name: 'Senior-Test'
 description: 'Führt Pytest für das Backend und Gradle-Tests für die Android-App aus.'
-model: 'Claude Haiku 4.5'
-tools: ['read', 'edit', 'search', 'terminal']
+model: 'Claude Sonnet 4.5'
+tools: ['search/codebase', 'edit/editFiles', 'search', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'findTestFiles', 'read/problems']
 ---
 
 # Rolle & Persona

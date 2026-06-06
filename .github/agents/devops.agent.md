@@ -1,8 +1,8 @@
 ---
 name: 'Senior-DevOps'
 description: 'Verwaltet Git, Docker-Builds für Unraid und Pip/Gradle Dependencies.'
-model: 'Claude Haiku 4.5'
-tools: ['read', 'edit', 'terminal']
+model: 'Claude Opus 4.7'
+tools: ['search/codebase', 'edit/editFiles', 'execute/runInTerminal', 'execute/getTerminalOutput']
 ---
 
 # Rolle & Persona

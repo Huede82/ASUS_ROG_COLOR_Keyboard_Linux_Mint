@@ -143,14 +143,35 @@
 - [x] Verifiziert: Install + Uninstall via GUI laufen sauber durch, asusctl bleibt im GUI-Pfad korrekt installiert.
 - [x] Lesson Learned: Bei pkexec-Aufrufen `stdin`/`stdout`/`stderr` möglichst unangetastet lassen — Polkit-Auth-Agenten sind empfindlich gegen FD-Manipulation.
 
+### v0.6.2 — rog-fan-keyd Auto-Reconnect (ERLEDIGT)
+
+- [x] **Bug:** `rog-fan-keyd` verlor nach Suspend/Resume oder USB-Re-Enumeration die Verbindung zum Asus-Keyboard-Device (`OSError ENODEV` auf `/dev/input/eventX`) und blieb dann dauerhaft taub — Fan-Taste reagierte ab dem Disconnect nicht mehr, Workaround war manueller `systemctl --user restart rog-fan-keyd`.
+- [x] **Fix in `rog-fan-keyd.py`:**
+  - Neue `_find_device(name, phys)` rescannt `evdev.list_devices()` nach `name`+`TARGET_KEY`-Capability (überlebt `eventX`-Re-Nummerierung).
+  - Neue `_reconnect(name, phys)` mit Backoff 1s → 2s → 5s → 10s (unbegrenzt) auf `threading.Event.wait()` (SIGTERM/SIGINT bricht sofort ab).
+  - `_read_loop` fängt jetzt `OSError ENODEV` / `EBADF`, schließt das Handle, ruft `_reconnect()`, fügt das neue Handle in `self.devices` ein und macht weiter. Andere Devices (z.B. `event8 = Asus WMI hotkeys`) laufen währenddessen ungestört weiter.
+  - VERSION 0.6.1 → 0.6.2.
+- [x] **Verifiziert:** Über `echo 0 > /sys/bus/usb/devices/1-3/authorized` einen echten USB-Disconnect erzwungen. Journal zeigt `Device /dev/input/event6 disconnected` und 8 s später (1+2+5 Backoff) `[reconnect] OK: /dev/input/event6 (Asus Keyboard)`. Fan-Taste funktioniert anschließend wieder ohne Service-Restart.
+- [x] **Nebenbefund (offen, NICHT in v0.6.2 gefixt):** `_on_keypress` läuft auf dem GTK-Main-Thread mit zwei synchronen `asusctl`-Subprozessen + 150 ms-Sleep → blockiert die UI 150 ms – 6 s pro Tastendruck und friert das OSD-Fenster bei `asusd`-Stalls ein. Kandidat für v0.6.3: Worker-Thread für asusctl-Calls, `osd.show_profile()` per `GLib.idle_add` zurück auf Main-Thread.
+
 ---
 
 ## Track 3: Übergreifend
 
 **Status:** Track 1 und Track 2 v1.0 sind released. Track 3 ist optional/poliert.
 
-- [ ] `install-rog-suite.sh` Meta-Installer (ruft RGB- + Fan-Installer nacheinander auf)
+### v2.0 — Meta-Installer (IN ARBEIT)
+
+- [~] `install-rog-suite.sh` — dünner Orchestrator über `install-rog-rgb.sh` + `install-rog-fan.sh`, keine Logik-Duplikation, idempotent
+  - [ ] 9.1 Skript-Skeleton: Header-Box „ROG Suite Meta-Installer", i18n via `ROG_LANG` (DE/EN, Bash-Assoziativ-Array `TR`), `step/ok/info/warn/die`-Helper, `require_root` + Auto-Relaunch via `pkexec` **einmal** am Anfang
+  - [ ] 9.2 Flags `--rgb-only` / `--fan-only` / `--uninstall` / `--lang de|en`; Default-Install-Reihenfolge **RGB → Fan**, Uninstall-Reihenfolge **Fan → RGB**; Sub-Installer-Aufruf via `env ROG_LANG=… INSTALL_USER=… INSTALL_HOME=… bash <script>` (kein erneutes `pkexec`); Fehler im Install → harter Stopp, Fehler im Uninstall → best-effort (`|| true`)
+  - [ ] 9.3 Akzeptanztest-Lauf auf G713QM: frischer Lauf, `--rgb-only`, `--fan-only`, `--uninstall`, `--uninstall --fan-only`, `--lang en`, Fehlersimulation (Sub-Installer umbenannt)
+  - [ ] 9.4 README-Eintrag (EN + DE) im Installations-Abschnitt: empfohlener Einstiegspunkt für Neuinstallationen
+
+### Sonstige (offen)
+
 - [ ] Gemeinsames `rog-diagnose.sh` (ruft `rog-kbd-diagnose` + `rog-fan-diagnose` auf)
+- [ ] GUI-Meta-Installer `install-rog-suite-gui.py` (Folge-Ticket nach v2.0 CLI)
 - [ ] Versionierung vereinheitlichen — alle Module tragen die gleiche Suite-Version (z.B. `2.0`, `2.1`, …)
 
 ---
